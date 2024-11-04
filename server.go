@@ -52,7 +52,34 @@ func (s *server) addDocument(w http.ResponseWriter, r *http.Request, _ httproute
 }
 
 func (s *server) searchDocuments(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	panic("not implemented")
+	q, err := parseQuery(r.URL.Query().Get("q"))
+	if err != nil {
+		jsonResponse(w, nil, err)
+		return
+	}
+
+	var documents []map[string]any
+
+	iter, _ := s.db.NewIter(nil)
+	defer iter.Close()
+	for iter.First(); iter.Valid(); iter.Next() {
+		var document map[string]any
+		err = json.Unmarshal(iter.Value(), &document)
+		if err != nil {
+			jsonResponse(w, nil, err)
+			return
+		}
+
+		if q.match(document) {
+			documents = append(documents, map[string]any{
+				"id":   string(iter.Key()),
+				"body": document,
+			})
+		}
+	}
+
+	jsonResponse(w, map[string]any{"documents": documents, "count": len(documents)}, nil)
+
 }
 
 func (s *server) getDocumentById(id []byte) (map[string]any, error) {
